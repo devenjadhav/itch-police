@@ -69,10 +69,10 @@ class AirtableGameValidator:
         self.table = self.api.table(self.base_id, 'projects')
     
     def get_projects_to_validate(self):
-        """Get all projects that need validation"""
+        """Get all projects that need validation from specific view"""
         try:
-            # Get records where ysws_status is not 'Ready'
-            records = self.table.all()
+            # Get records from specific view
+            records = self.table.all(view='viwTShFXBXjhP4w9s')
             projects_to_check = []
             
             for record in records:
@@ -80,8 +80,8 @@ class AirtableGameValidator:
                 gameplay_url = fields.get('gameplay_url')
                 ysws_status = fields.get('ysws_status')
                 
-                # Only check if there's a URL and status is not already 'Ready'
-                if gameplay_url and ysws_status != 'Ready':
+                # Only check if there's a URL and status is not already processed
+                if gameplay_url and ysws_status not in ['Ready', 'Invalid']:
                     projects_to_check.append({
                         'id': record['id'],
                         'url': gameplay_url,
@@ -117,21 +117,24 @@ def main():
             logger.info("No projects to validate")
             return
         
-        validated_count = 0
+        ready_count = 0
+        invalid_count = 0
         
         for project in projects:
             logger.info(f"Checking project {project['id']}: {project['url']}")
             
             if checker.is_playable(project['url']):
                 if validator.update_status(project['id'], 'Ready'):
-                    validated_count += 1
+                    ready_count += 1
             else:
                 logger.info(f"Game not playable in browser: {project['url']}")
+                if validator.update_status(project['id'], 'Invalid'):
+                    invalid_count += 1
             
             # Rate limiting - be nice to itch.io
             time.sleep(1)
         
-        logger.info(f"Validation complete. Updated {validated_count} games to 'Ready' status")
+        logger.info(f"Validation complete. {ready_count} games set to 'Ready', {invalid_count} games set to 'Invalid'")
         
     except Exception as e:
         logger.error(f"Fatal error: {str(e)}")
